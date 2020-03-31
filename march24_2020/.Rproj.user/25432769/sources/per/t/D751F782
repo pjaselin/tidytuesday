@@ -1,0 +1,33 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1585090766289.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "D751F782",
+    "lastKnownWriteTime" : 140680668200704,
+    "last_content_update" : 1585090766289,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "40B2899B",
+        "caption" : "tbi_year",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=tbi_year&cache_key=40B2899B",
+        "displayedObservations" : 216,
+        "environment" : "",
+        "expression" : "tbi_year",
+        "object" : "tbi_year",
+        "preview" : 0,
+        "totalObservations" : 216,
+        "variables" : 5
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}
