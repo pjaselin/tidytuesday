@@ -1,2 +1,5 @@
-.Rproj.user
-.Rhistory
+*.Rproj
+*.Rhistory
+.Rproj.user/
+node_modules/
+package-lock.json
