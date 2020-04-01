@@ -12,6 +12,12 @@ knitr::opts_chunk$set(echo = TRUE)
 # Library/Data Imports
 
 ```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
 # Get the Data
 
 brewing_materials <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-31/brewing_materials.csv')
@@ -31,12 +37,303 @@ beer_states <- readr::read_csv('https://raw.githubusercontent.com/rfordatascienc
 #brewing_materials <- tuesdata$brewing_materials
 ```
 
+# Helper Functions
+```{r}
+drop_singular_columns <- function(x) {
+  # takes a data frame and returns a data frame without columns that have the same value
+  x[vapply(x, function(y) length(unique(y)) > 1, logical(1L))]
+}
+is.Date <- function(x){
+  # takes column or value and checks to see if it is a date --> could be more generalized
+  inherits(x, "Date")
+}
+num_unique <- function(x){
+  # gets the number of unique elements in vector x
+  length(unique(x))
+}
+get_variable_name <- function(x){
+  # gets the name of a variable as a string
+  deparse(substitute(x))
+}
+isEmpty <- function(x){
+  # is x of length 0
+  return(length(x) == 0)
+}
+```
+
+
+# Remove Singular Columns
+```{r}
+brewing_materials <- drop_singular_columns(brewing_materials)
+beer_taxed <- drop_singular_columns(beer_taxed)
+brewer_size <- drop_singular_columns(brewer_size)
+beer_states <- drop_singular_columns(beer_states)
+```
 
 
 
+# Data Exploration
+
+## brewing_materials
+First, it looks like we can get the data for 2007 based on the month_prior_year column. So let's do that and tack it on to our data.
+```{r}
+# generate 2007 data
+brewing_materials_2007 <- brewing_materials %>%
+  filter(year == 2008) %>%
+  mutate(year = 2007,
+         month_current = month_prior_year,
+         ytd_current = ytd_prior_year,
+         month_prior_year = NA,
+         ytd_prior_year = NA)
+# stack this on top of the other data
+brewing_materials <- rbind.data.frame(brewing_materials_2007, 
+                                      brewing_materials)
+```
+
+What are the material_types?
+```{r}
+unique(brewing_materials$material_type)
+```
+
+What are the line item types?
+```{r}
+unique(brewing_materials$type)
+```
+
+Create date column
+```{r}
+brewing_materials <- brewing_materials %>%
+  mutate(date = as.Date(glue::glue("{year}-{month}-01")))
+```
+
+Look at all material types as a function of time
+```{r}
+brewing_materials %>%
+  ggplot(aes(x = date, y = month_current, colour = type)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+
+```{r}
+brewing_materials %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  facet_wrap(~type, scales = "free") +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+Look at just after 2016.
+```{r}
+brewing_materials %>%
+  filter(year >= 2016) %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  facet_wrap(~type, scales = "free") +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type after 2016") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+We need to figure out what is causing the value decay after 2016 because the plummetting values doesn't really make sense.
+```{r}
+brewing_materials %>%
+  #filter(year >= 2016) %>%
+  filter(type == "Total Used") %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value[Barrels] ") +
+  ggtitle("Time Series Values for Total Used") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+plotly::ggplotly()
+```
+
+Let's look for completeness in the availability of the product type columns across the span of the data. Since we know there are 12 product types, we would expect that each month should have 12 types present, but we can see if there are any without.
+```{r}
+brewing_materials %>%
+  group_by(date) %>%
+  summarise(num_types = num_unique(type)) %>%
+  filter(num_types != 12)
+```
+
+Let's try scaling the data by some order of magnitude to see if that fixes the data.
+```{r}
+brewing_materials %>%
+  #filter(year >= 2016) %>%
+  mutate(month_current = ifelse(year >= 2016, month_current*20, month_current)) %>%
+  filter(type == "Total Used") %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value") +
+  ggtitle("Time Series Values by Product Type") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+So it's really not possible to try to scale the data to fix it. So let's just replot everything for pre-2016 values.
+```{r}
+brewing_materials %>%
+  filter(year < 2016) %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  facet_wrap(~type, scales = "free") +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+
+Let's look at the grain products and non-grain products separately.
+```{r}
+brewing_materials %>%
+  filter(material_type == "Grain Products") %>%
+  filter(year < 2016) %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  facet_wrap(~type, scales = "free") +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type for Grain Producrts") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+  
+brewing_materials %>%
+  filter(material_type == "Non-Grain Products") %>%
+  filter(year < 2016) %>%
+  ggplot(aes(x = date, y = month_current)) +
+  geom_line() +
+  facet_wrap(~type, scales = "free") +
+  theme_bw() +
+  xlab("Date") +
+  ylab("Monthly Value [Barrels]") +
+  ggtitle("Time Series Values by Product Type for Non-Grain Products") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45))
+```
+
+We can definitely see some seasonality in the data. Most notably that beer production peaks in the spring-summer and is lowest during the winter. There are a number of anomalous. What is strange is that some of these products are related, i.e. malt and barley. So while barley is malted, it is unclear whether these two are related especially noting that malt and malt products are an order of magnitude greater than barley and barley products.
+
+## Time Series Clustering
+```{r}
+# get date vs product type
+ts_brewing_materials <- brewing_materials %>%
+  filter(year < 2016) %>%
+  select(type, month_current, date) %>%
+  tidyr::spread(date, month_current) %>%
+  t() %>%
+  as.data.frame(stringsAsFactors=FALSE)
+# set the first row as the column names
+colnames(ts_brewing_materials) <- ts_brewing_materials["type",]
+# drop the first row
+ts_brewing_materials <- ts_brewing_materials[-c(1),]
+# set all columns to numeric
+ts_brewing_materials[] <- lapply(ts_brewing_materials, as.numeric)
+# drop our total columns
+#ts_brewing_materials <- ts_brewing_materials %>%
+#  select(-`Total Grain products`, -`Total Non-Grain products`, -`Total Used`)
+```
+
+```{r}
+corrplot::corrplot(cor(ts_brewing_materials))
+PerformanceAnalytics::chart.Correlation(ts_brewing_materials)
+```
+
+```{r}
+ts_brewing_materials_tsclustering <- list()
+for (name in names(ts_brewing_materials)){
+  ts_brewing_materials_tsclustering[[name]] <- ts_brewing_materials[,name]
+}
+```
+
+
+```{r}
+dtw_cluster = dtwclust::tsclust(ts_brewing_materials_tsclustering, type="partitional", k=5,
+                                distance="dtw_basic", centroid = "pam", seed=1234L, trace=T, 
+                                args = dtwclust::tsclust_args(dist = list(window.size = 5)))
+plot(dtw_cluster)
+```
+
+```{r}
+hc <- dtwclust::tsclust(ts_brewing_materials_tsclustering, type = "hierarchical", k = 9L, 
+                        distance = "sbd", trace = TRUE,
+                        control = dtwclust::hierarchical_control(method = "average"))
+plot(hc)
+```
+
+```{r}
+# Multivariate series provided as a list of matrices, using GAK distance
+mvc <- dtwclust::tsclust(ts_brewing_materials_tsclustering, k = 5L, distance = "gak", seed = 390L)
+# Note how the variables of each series are appended one after the other in the plot
+plot(mvc, labels = list(nudge_x = -10, nudge_y = 1, size = 2))
+```
 
 
 
+## Seasonality of a Column
+Decompose the malt products
+```{r}
+components_malt <- decompose(ts(ts_brewing_materials$`Malt and malt products`, start = 1, end = 11, frequency = 12))
+```
 
+Plot the seasonal components
+```{r}
+plot(components_malt)
+```
+
+From here we could go and remove components from the observed data, for example:
+```{r}
+plot(components_malt$x - components_malt$seasonal) # seasonally adjusted data
+```
+
+Thus we can see the influence of random and seasonal behavior on the observed data.
+
+
+
+# Beer States
+```{r}
+beer_states %>%
+  filter(state != "total") %>%
+  ggplot(aes(x = year, y = barrels, colour = state)) +
+  facet_wrap(~type, scales = "free") +
+  geom_line() +
+  theme_bw()
+```
+
+So this isn't right but we can see the average use of bottles and cans as well as kegs and barrels slightlt decreasing while on premise consumption is increasing.
+```{r}
+beer_states %>%
+  filter(state != "total") %>%
+  group_by(year, type) %>%
+  summarise(mean_barrels = mean(barrels, na.rm = TRUE),
+            sd_barrels = sd(barrels, na.rm = TRUE)) %>%
+  ggplot(aes(x = year, y = mean_barrels)) +
+  facet_wrap(~type, scales = "free") +
+  geom_errorbar(aes(ymin=mean_barrels-sd_barrels, ymax=mean_barrels+sd_barrels), width=.1) +
+  geom_line() +
+  geom_point() +
+  theme_bw()
+```
 
 
