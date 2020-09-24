@@ -1,0 +1,21 @@
+---
+title: "June 6, 2020"
+author: "pjaselin"
+date: "6/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Project Setup
+## Library Imports
+
+## Data Imports
+```{r}
+marbles <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-02/marbles.csv')
+```
+

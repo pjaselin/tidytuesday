@@ -1,0 +1,34 @@
+---
+title: "May 19, 2020"
+author: "pjaselin"
+date: "5/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project Setup
+## Library Imports
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+## Data Imports
+```{r}
+cocktails <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-26/cocktails.csv')
+boston_cocktails <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-26/boston_cocktails.csv')
+```
+
+
+```{r}
+table(vb_matches$circuit, vb_matches$gender)
+```
+
+
+
+
+
+

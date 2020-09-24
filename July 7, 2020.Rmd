@@ -1,0 +1,230 @@
+---
+title: "July 7, 2020"
+author: "pjaselin"
+date: "7/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project Setup
+
+## Library Import
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+## Data Import
+```{r}
+coffee_ratings <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-07-07/coffee_ratings.csv')
+```
+
+## Helper Functions
+```{r}
+drop_singular_columns <- function(x) {
+  # takes a data frame and returns a data frame without columns that have the same value
+  x[vapply(x, function(y) length(unique(y)) > 1, logical(1L))]
+}
+is.Date <- function(x){
+  # takes column or value and checks to see if it is a date --> could be more generalized
+  inherits(x, "Date")
+}
+num_unique <- function(x){
+  # gets the number of unique elements in vector x
+  length(unique(x))
+}
+```
+
+
+```{r}
+dim(coffee_ratings)
+```
+
+
+
+# Study Missingness
+```{r}
+missingness <- coffee_ratings %>%
+  tidyr::gather(key, value) %>%
+  mutate(ismissing = is.na(value)) %>%
+  group_by(key, ismissing) %>%
+  summarise(num_missing = sum(ismissing)) %>%
+  filter(ismissing == TRUE) %>%
+  mutate(perc_missing = num_missing/dim(coffee_ratings)[1]) %>%
+  mutate(perc_present = 1 - perc_missing) %>%
+  rename(varname = key)
+```
+
+Which columns are complete?
+```{r}
+setdiff(names(coffee_ratings), missingness$varname)
+```
+
+
+Graph the counts of missing values by column
+```{r}
+missingness %>%
+  ggplot(aes(x = reorder(varname, -perc_missing), y = num_missing)) + 
+  geom_col() +
+  theme_bw() + 
+  theme(axis.text.y = element_text(size = 6),
+        plot.title = element_text(hjust = 0.5)) +
+  xlab("Column Name") +
+  ylab("Missing Value Count") +
+  ggtitle("Counts of Missing Values across Columns where they Occur") +
+  coord_flip() +
+  scale_y_continuous(breaks=scales::pretty_breaks(n=10))
+```
+
+
+Graph the percent missing 
+```{r}
+perc_missingness <- missingness %>%
+  tidyr::gather(key, value, -varname, -ismissing, -num_missing) %>%
+  mutate(key = recode(key, "perc_present" = "% Present", "perc_missing" = "% Missing")) %>%
+  mutate(key = factor(key, levels = c("% Present", "% Missing"))) 
+
+perc_missingness %>%
+  ggplot(aes(x = reorder(varname, -num_missing), y = value, fill = key)) + 
+  geom_col() +
+  theme_bw() + 
+  theme(axis.text.y = element_text(size = 6),
+        plot.title = element_text(hjust = 0.5)) +
+  xlab("Column Name") +
+  ylab("Missing Value Percent [%]") +
+  ggtitle("Percentage of Missing Values across Columns where they Occur") +
+  coord_flip() +
+  scale_y_continuous(breaks=scales::pretty_breaks(n=10)) + 
+  guides(fill=guide_legend(title="")) +
+  scale_fill_manual(values = c("steelblue", "tomato3"))# +
+  #geom_text(aes(label = round(value,4)*100), size = 2)
+```
+
+
+
+
+```{r}
+reorder_score <- c()
+for (score in missingness$num_missing) {
+  reorder_score <- c(reorder_score, rep(score, (length(coffee_ratings$total_cup_points)*length(missingness$varname))/length(unique(missingness$varname))))
+}
+
+coffee_ratings %>%
+  select(missingness$varname) %>%
+  mutate(id = row_number()) %>%
+  tidyr::gather(-id, key = "key", value = "val") %>%
+  mutate(isna = is.na(val)) %>%
+  ggplot(aes(reorder(key,-reorder_score), id, fill = isna)) +
+  geom_raster() +
+  scale_fill_manual(name = "",
+                    values = c('steelblue', 'tomato3'),
+                    labels = c("Present", "Missing")) +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 6),
+        plot.title =  element_text(hjust = 0.5)) +
+  scale_y_continuous(breaks = scales::pretty_breaks(n=7)) +
+  xlab("Variable") +
+  ylab("Row Number") + 
+  ggtitle("Missing Values in Rows where Missingness Occurs") +
+  coord_flip()
+```
+
+get the percent missing row by row
+```{r}
+coffee_ratings %>%
+  mutate(id = row_number()) %>%
+  tidyr::gather(-id, key = "key", value = "val") %>%
+  select(-key) %>%
+  group_by(id) %>%
+  summarise(perc_na = sum(is.na(val))/length(val)) %>%
+  ggplot(aes(x = id, y = perc_na)) +
+  geom_line() +
+  theme_bw()
+```
+
+
+# Data Cleaning
+```{r}
+coffee_ratings <- coffee_ratings %>%
+  mutate(grading_date = stringr::str_replace(grading_date, "rd,", ",")) %>%
+  mutate(grading_date = stringr::str_replace(grading_date, "nd,", ",")) %>%
+  mutate(grading_date = stringr::str_replace(grading_date, "th,", ",")) %>%
+  mutate(grading_date = stringr::str_replace(grading_date, "st,", ",")) %>%
+  mutate(grading_date = stringr::str_replace(grading_date, "\n", "")) %>%
+  mutate(grading_date = lubridate::mdy(grading_date)) %>%
+  mutate(expiration = stringr::str_replace(expiration, "rd,", ",")) %>%
+  mutate(expiration = stringr::str_replace(expiration, "nd,", ",")) %>%
+  mutate(expiration = stringr::str_replace(expiration, "th,", ",")) %>%
+  mutate(expiration = stringr::str_replace(expiration, "st,", ",")) %>%
+  mutate(expiration = stringr::str_replace(expiration, "\n", "")) %>%
+  mutate(expiration = lubridate::mdy(expiration))
+```
+
+
+
+## Value Counts for Categorical Features
+
+```{r}
+head(coffee_ratings)
+```
+
+how many unique levels are there in each of the discrete columns?
+```{r}
+coffee_ratings %>%
+  select(species, owner, country_of_origin, farm_name, mill, ico_number, company, altitude, producer, in_country_partner, harvest_year, owner_1, variety,
+         processing_method, color, category_one_defects, category_two_defects, quakers, certification_body, unit_of_measurement) %>%
+  tidyr::gather(key, value) %>%
+  group_by(key) %>%
+  summarise(num_unique = num_unique(value)) %>%
+  arrange(-num_unique) %>%
+  mutate(unique_frac = num_unique/nrow(coffee_ratings))
+```
+
+let's ignore columns that have high cardinality (above 20%)
+
+
+```{r, fig.width = 6, fig.height = 4}
+coffee_ratings %>%
+  select(species, country_of_origin, in_country_partner, variety, processing_method, color, category_one_defects, category_two_defects, quakers, certification_body, unit_of_measurement) %>%
+  tidyr::gather(key, value) %>%
+  #filter(!is.na(value)) %>%
+  ggplot(aes(x = value, width = 0.5)) +
+  geom_bar(stat="count", position = "identity") +
+  theme_bw() + 
+  theme(axis.text.y = element_text(size = 6),
+        strip.text.x = element_text(size = 8)) +
+  facet_wrap(~key, scales = "free") +
+  #scale_y_continuous(breaks=scales::pretty_breaks(n=5)) +
+  coord_flip() +
+  scale_x_discrete(label=function(x) abbreviate(x, minlength = 7))
+```
+
+
+
+grading by dates
+```{r}
+coffee_ratings %>%
+  select(grading_date, aroma, flavor, aftertaste, body, balance, uniformity, clean_cup, sweetness, cupper_points, moisture) %>%
+  tidyr::gather(key, value, -grading_date) %>%
+  ggplot(aes(x = grading_date, y = value)) +
+  facet_wrap(~key, scales = "free") +
+  geom_point(size=1, shape=16) +
+  theme_bw() 
+```
+
+grading distributions
+```{r}
+coffee_ratings %>%
+  select(aroma, flavor, aftertaste, body, balance, uniformity, clean_cup, sweetness, cupper_points, moisture) %>%
+  tidyr::gather(key, value) %>%
+  ggplot(aes(x = key, y = value)) +
+  geom_boxplot() +
+  theme_bw() 
+```
+
+
+compare reviewers
+predict score?
